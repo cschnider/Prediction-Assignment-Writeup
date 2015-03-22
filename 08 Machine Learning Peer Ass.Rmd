@@ -1,0 +1,170 @@
+---
+title: "Practical Machine Learning - Peer Assessment"
+author: "CSchnider"
+date: "March 22th, 2015"
+output: 
+  html_document:
+    keep_md: true
+---
+
+# Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).  
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har
+
+#Loading and preprocessing the data
+##Set working directory
+```{r}
+setwd("~/R/Coursera/05 Machine Learning")
+```
+
+##Download data
+```{r}
+if (!file.exists("./pml-training.csv")) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+        destfile = "./pml-training.csv")
+}
+if (!file.exists("./pml-testing.csv")) {
+    download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+        destfile = "./pml-testing.csv")
+}
+```
+
+##Read CSV files
+```{r}
+training <- read.csv("pml-training.csv", na.strings=c("", "NA","#DIV/0!"))
+testing <- read.csv("pml-testing.csv", na.strings=c("", "NA","#DIV/0!"))
+```
+
+# Descriptive Analysis of Dataset
+
+## Counts
+Count of rows:
+```{r}
+nrow(training)
+```
+
+Count of columns:
+```{r}
+ncol(training)
+```
+
+Count of complete records:
+```{r}
+sum(complete.cases(training))
+```
+What we can see here is there are many incomplete records.
+
+
+Number of NAs per column:
+```{r}
+x<-colSums(is.na(training))
+labels(x[x<=0])
+```
+There a re many columns with the same amount of missing data. Probably these variables should be ignored. Otherwise these variables could be good indicators for as specific class. Let's try to ignore these variables in the first try. If the prediction is not as good as it should be, we'll need to include them again.
+
+Distribution of Classes:
+```{r}
+library(plyr)
+classe_freq<-count(training, "classe")
+barplot(classe_freq$freq,names.arg=classe_freq$classe)
+```
+
+Description of Classes:
+
+- A: exactly according to the specification
+- B: throwing the elbows to the front
+- C: lifting the dumbbell only halfway
+- D: lowering the dumbbell only halfway
+- E: throwing the hips to the front
+
+Read more: http://groupware.les.inf.puc-rio.br/har#dataset#ixzz3UzyMCtX9
+
+
+##Overview/Structure of Datset
+```{r}
+str(training)
+```
+
+
+##Selection of variables
+
+We'll keep only the variables without missing values and exclude user metadata in columns 1-7 (name, timestamps, etc.).
+```{r}
+col_selection<-colnames(training[,colSums(is.na(training))==0])
+col_selection<-col_selection[-(1:7)]
+col_selection
+```
+Exclude unwanted variables from training dataset:
+```{r}
+training_red<-training[,col_selection]
+```
+Count of rows:
+```{r}
+nrow(training_red)
+```
+
+Count of columns:
+```{r}
+ncol(training_red)
+```
+
+Count of complete records:
+```{r}
+sum(complete.cases(training_red))
+```
+
+##Predictive Model
+Let's use the random forest algorithm for an initial attempt at building a predictive model.
+
+Load libraries and set the seed:
+```{r}
+library(randomForest)
+library(caret)
+set.seed(123)
+```
+
+Let's train the predictive model:
+```{r}
+model <- randomForest(classe ~ ., training_red, ntree = 1024)
+```
+
+```{r}
+model
+model$confusion
+```
+With an error rate 0f 0.26% the result looks very good.
+
+Let's have a look at the importance of the variables:
+```{r}
+varImp(model)
+```
+
+#Pedict classes for Testing dataset
+
+Use model to predict classes:
+```{r}
+predict(model, testing)
+answers<-predict(model, testing)
+```
+
+Create the files for the validation:
+```{r}
+pml_write_files = function(x){
+          n = length(x)
+          for(i in 1:n){
+                    filename = paste0("problem_id_",i,".txt")
+                    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+          }
+}
+
+pml_write_files(answers)
+```
+
+The model predicts all test records correctly. There's no need to optimize the model.
+
+##References
+
+[^groupware]: http://groupware.les.inf.puc-rio.br/har
+
